@@ -77,6 +77,8 @@
             left: 0;
             width: 100%;
             height: 100%;
+        }
+        #webcam-video {
             transform: scaleX(-1); 
         }
         .feature-card {
@@ -273,20 +275,19 @@
                     canvasCtx.save();
                     canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
                     
-                    // Flip the canvas context horizontally to match the mirrored video feed
-                    canvasCtx.scale(-1, 1);
-                    canvasCtx.translate(-canvasElement.width, 0);
-
                     updateHandStatus(results.landmarks.length);
                     handCursor1.visible = handCursor2.visible = false;
 
                     if (results.landmarks.length > 0) {
+                        // Invertir el contexto del lienzo para que el dibujo coincida con el video espejado
+                        canvasCtx.save();
+                        canvasCtx.scale(-1, 1);
+                        canvasCtx.translate(-canvasElement.width, 0);
+                        
                         const drawingUtils = new DrawingUtils(canvasCtx);
                         results.landmarks.forEach((landmarks, i) => {
                             const handedness = results.handednesses[i][0].categoryName;
-                            // The MediaPipe library assumes a mirrored video feed. Since the raw feed is un-mirrored,
-                            // the handedness detection is inverted. 'Left' corresponds to the user's actual right hand.
-                            const isRightHand = handedness === 'Left';
+                            const isRightHand = handedness === 'Right';
                             const color = isRightHand ? "#FF0000" : "#0000FF";
                             drawingUtils.drawLandmarks(landmarks, { color, lineWidth: 2, radius: 4 });
                             drawingUtils.drawConnectors(landmarks, HandLandmarker.HAND_CONNECTIONS, { color: "#FFFFFF", lineWidth: 2 });
@@ -303,6 +304,8 @@
                             const dir = vec.sub(camera.position).normalize();
                             cursor.position.copy(camera.position.clone().add(dir.multiplyScalar(-camera.position.z / dir.z)));
                         });
+
+                        canvasCtx.restore(); // Restaurar el contexto a su estado original
                     }
                     canvasCtx.restore();
                 }
@@ -464,3 +467,4 @@
     </script>
 </body>
 </html>
+
