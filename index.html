@@ -96,7 +96,7 @@
             border: 1px solid rgba(75, 85, 99, 0.5); /* gray-700 with transparency */
             box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
             display: none;
-            transition: opacity 0.3s ease-in-out, transform 0.3s ease-in-out;
+            transition: opacity 0.3s ease-in-out; /* Removed transform transition for smoother dragging */
             touch-action: none; /* Evita el scroll del navegador */
         }
         /* Nueva regla para el movimiento con transform */
@@ -808,7 +808,9 @@
             function onDragStart(event) {
                 const target = event.target.closest('.draggable');
                 // Salir si no es un elemento arrastrable o si se está interactuando con un control
-                if (!target || event.target.tagName === 'BUTTON' || event.target.tagName === 'INPUT' || event.target.tagName === 'SELECT') return;
+                if (!target || event.target.closest('button') || event.target.closest('input') || event.target.closest('select')) {
+                    return;
+                }
 
                 // Para el panel de control, solo permitir arrastrar desde la barra de título
                 if (target.id === 'controls-panel' && !event.target.closest('.cursor-grab')) {
