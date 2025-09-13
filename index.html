@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Arte Interactivo y Sonido Reactivo v7</title>
+    <title>Arte Interactivo y Sonido Reactivo</title>
     <!-- Enlace a Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -96,17 +96,23 @@
             border: 1px solid rgba(75, 85, 99, 0.5); /* gray-700 with transparency */
             box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
             display: none;
-            transition: transform 0.3s ease-in-out;
+            transition: opacity 0.3s ease-in-out, transform 0.3s ease-in-out;
+            touch-action: none; /* Evita el scroll del navegador */
         }
-        #controls-panel.collapsed {
-            transform: translateX(-100%) translateY(calc(-100% - 20px));
+        /* Nueva regla para el movimiento con transform */
+        .draggable {
+            touch-action: none;
+            user-select: none;
+        }
+        .draggable.dragging {
+            cursor: grabbing;
         }
 
-        /* --- Botón de Menú --- */
+        /* --- Botón de Menú (minimizar) --- */
         #menu-button {
             position: absolute;
             bottom: 20px;
-            right: 20px;
+            left: 20px;
             z-index: 10;
             background-color: rgba(17, 24, 39, 0.7);
             backdrop-filter: blur(12px);
@@ -116,9 +122,7 @@
             box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
             cursor: pointer;
             display: none; /* Oculto por defecto */
-        }
-        #menu-button.hidden {
-            display: none;
+            transition: opacity 0.3s ease-in-out;
         }
         
         /* --- Contenedor de la Cámara --- */
@@ -136,6 +140,7 @@
             width: 200px;
             height: 150px;
             transition: opacity 0.3s ease-in-out;
+            touch-action: none;
         }
         #webcam-video, #output-canvas {
             position: absolute;
@@ -163,7 +168,16 @@
             transform: translateY(-5px);
         }
 
-        /* --- Estilos para Móviles --- */
+        /* Estilo para el nivel de audio */
+        .audio-bar {
+            background-color: #4b5563;
+            transition: background-color 0.1s ease-in-out;
+        }
+        .audio-bar.active {
+            background-color: #38bdf8;
+        }
+
+        /* Estilos para Móviles */
         @media (max-width: 768px) {
             .feature-card-container { flex-direction: column; gap: 1rem; }
             .feature-card { width: 100%; max-width: 250px; padding: 1rem; }
@@ -180,14 +194,66 @@
                 transform: translate(-50%, -50%);
                 width: 90%;
             }
-            #controls-panel.collapsed {
-                transform: translate(-50%, calc(-50% - 20px));
-                visibility: hidden;
-                opacity: 0;
-            }
-            #menu-button.hidden {
-                display: flex; /* Muestra el botón de menú en móviles */
-            }
+        }
+        
+        /* Estilos específicos para el título */
+        .glitch-text {
+            position: relative;
+            font-size: clamp(2rem, 8vw, 4rem);
+            font-weight: 700;
+            line-height: 1.2;
+            text-transform: uppercase;
+            user-select: none;
+            z-index: 1;
+        }
+
+        .glitch-text span {
+            display: block;
+        }
+
+        .glitch-text::before,
+        .glitch-text::after {
+            content: attr(data-text);
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        .glitch-text::before {
+            color: cyan;
+            opacity: 0.75;
+            text-shadow: -2px 0 0 #ff00ff;
+            clip-path: inset(calc(var(--glitch-offset-before) * 1%) 0 0 0);
+        }
+
+        .glitch-text::after {
+            color: #ff00ff;
+            opacity: 0.75;
+            text-shadow: 2px 0 0 cyan;
+            clip-path: inset(0 0 calc(var(--glitch-offset-after) * 1%) 0);
+        }
+
+        @keyframes glitch-static {
+            0% { --glitch-offset-before: 0; --glitch-offset-after: 0; }
+            10% { --glitch-offset-before: 5; --glitch-offset-after: 10; }
+            20% { --glitch-offset-before: 15; --glitch-offset-after: 5; }
+            30% { --glitch-offset-before: 2; --glitch-offset-after: 18; }
+            40% { --glitch-offset-before: 12; --glitch-offset-after: 7; }
+            50% { --glitch-offset-before: 8; --glitch-offset-after: 14; }
+            60% { --glitch-offset-before: 18; --glitch-offset-after: 2; }
+            70% { --glitch-offset-before: 9; --glitch-offset-after: 11; }
+            80% { --glitch-offset-before: 16; --glitch-offset-after: 6; }
+            90% { --glitch-offset-before: 3; --glitch-offset-after: 19; }
+            100% { --glitch-offset-before: 0; --glitch-offset-after: 0; }
+        }
+
+        .glitch-text::before,
+        .glitch-text::after {
+            animation: glitch-static 5s infinite step-end;
         }
     </style>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -199,25 +265,25 @@
     <div id="container"></div>
 
     <!-- Contenedor de la cámara con el canvas para dibujar -->
-    <div id="camera-container">
+    <div id="camera-container" class="draggable">
         <video id="webcam-video" autoplay playsinline></video>
         <canvas id="output-canvas"></canvas>
     </div>
 
     <!-- Botón de menú para el panel colapsado -->
-    <button id="menu-button" class="hidden flex items-center justify-center">
+    <button id="menu-button" class="absolute bottom-5 left-5 z-10 hidden flex items-center justify-center bg-gray-900/70 backdrop-blur-md p-3 rounded-full border border-gray-700/50 shadow-lg transition-all duration-300 hover:scale-110">
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6 text-white">
             <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
         </svg>
     </button>
 
     <!-- Panel de Control -->
-    <div id="controls-panel">
-        <div class="flex justify-between items-center mb-4">
+    <div id="controls-panel" class="draggable">
+        <div class="flex justify-between items-center mb-4 cursor-grab">
             <h2 class="font-bold text-lg text-white/90">Control</h2>
-            <button id="collapse-btn" class="text-white/80 hover:text-white transition-colors">
+            <button id="minimize-btn" class="text-white/80 hover:text-white transition-colors">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 12h-15" />
                 </svg>
             </button>
         </div>
@@ -228,11 +294,8 @@
                 <label for="mode-select" class="block font-semibold mb-1 text-white/80 text-sm">Modo de Sonido</label>
                 <select id="mode-select" class="w-full bg-gray-700 p-2 rounded-md text-white border-none focus:ring-2 focus:ring-blue-500 text-sm">
                     <option value="sintetizador">Sintetizador</option>
-                    <option value="organo">Órgano de Iglesia</option>
                     <option value="piano">Piano</option>
                     <option value="cuerdas">Cuerdas</option>
-                    <option value="percusiones">Percusiones</option>
-                    <option value="experimental">Experimental</option>
                 </select>
             </div>
             <!-- Control de volumen -->
@@ -254,11 +317,7 @@
         </div>
 
         <div class="space-y-2 mb-4">
-            <button id="fullscreen-btn" class="w-full bg-gray-700 hover:bg-gray-600 p-2 rounded-md transition-colors flex items-center justify-center gap-2 text-white/80 text-sm">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 1v4m0 0h-4m4 0l-5-5"></path></svg>
-                <span>Pantalla Completa</span>
-            </button>
-            <button id="reset-btn" class="w-full bg-gray-700 hover:bg-gray-600 p-2 rounded-md transition-colors text-white/80 text-sm">Reiniciar Escena</button>
+            <button id="reset-btn" class="w-full bg-slate-600 hover:bg-slate-500 p-2 rounded-md font-bold transition-colors text-white text-sm mb-2">Restablecer Vista</button>
             <button id="stop-btn" class="w-full bg-red-600 hover:bg-red-500 p-2 rounded-md font-bold transition-colors text-white text-sm">Detener Experiencia</button>
         </div>
 
@@ -273,7 +332,7 @@
             <div>
                 <p class="font-semibold mb-2 text-white/80 text-sm">Nivel de Audio</p>
                 <div id="audio-level-container" class="flex items-center space-x-1 h-3 w-full">
-                    <div class="flex-1 h-full bg-gray-600 rounded-sm transition-colors"></div> <div class="flex-1 h-full bg-gray-600 rounded-sm transition-colors"></div> <div class="flex-1 h-full bg-gray-600 rounded-sm transition-colors"></div> <div class="flex-1 h-full bg-gray-600 rounded-sm transition-colors"></div> <div class="flex-1 h-full bg-gray-600 rounded-sm transition-colors"></div> <div class="flex-1 h-full bg-gray-600 rounded-sm transition-colors"></div>
+                    <div class="flex-1 h-full bg-gray-600 rounded-sm audio-bar"></div> <div class="flex-1 h-full bg-gray-600 rounded-sm audio-bar"></div> <div class="flex-1 h-full bg-gray-600 rounded-sm audio-bar"></div> <div class="flex-1 h-full bg-gray-600 rounded-sm audio-bar"></div> <div class="flex-1 h-full bg-gray-600 rounded-sm audio-bar"></div> <div class="flex-1 h-full bg-gray-600 rounded-sm audio-bar"></div> <div class="flex-1 h-full bg-gray-600 rounded-sm audio-bar"></div> <div class="flex-1 h-full bg-gray-600 rounded-sm audio-bar"></div> <div class="flex-1 h-full bg-gray-600 rounded-sm audio-bar"></div> <div class="flex-1 h-full bg-gray-600 rounded-sm audio-bar"></div>
                 </div>
             </div>
         </div>
@@ -282,9 +341,9 @@
     <!-- Superposición de Bienvenida -->
     <div id="overlay">
         <div class="text-center p-4 max-w-4xl mx-auto">
-            <h1 class="text-4xl md:text-7xl font-bold mb-2 text-white/90">Arte Interactivo</h1>
-            <h2 class="text-2xl md:text-4xl text-gray-400 mb-6">y Sonido Reactivo</h2>
-            <p class="description text-base text-gray-300 max-w-2xl mx-auto mb-10">Transforma tu mano en un instrumento. Toca los cubos para producir sonidos y efectos visuales en una experiencia inmersiva que fusiona arte, música y visión por computadora.</p>
+            <h1 class="glitch-text" data-text="Arte Interactivo">Arte Interactivo</h1>
+            <h2 class="glitch-text" data-text="y Sonido Reactivo">y Sonido Reactivo</h2>
+            <p class="description text-base text-gray-300 max-w-2xl mx-auto mt-8 mb-10">Transforma tu mano en un instrumento. Toca los cubos para producir sonidos y efectos visuales en una experiencia inmersiva que fusiona arte, música y visión por computadora.</p>
             <div class="feature-card-container flex justify-center gap-6 mb-12 flex-wrap">
                 <div class="feature-card">
                     <h3 class="font-semibold mb-2 text-white/80">Matriz 3D</h3>
@@ -299,7 +358,7 @@
                     <p class="text-sm text-gray-400">Controla la experiencia con gestos de tu mano.</p>
                 </div>
             </div>
-            <button id="startButton">Iniciar Experiencia</button>
+            <button id="startButton" disabled>Iniciando...</button>
         </div>
     </div>
 
@@ -335,12 +394,20 @@
             const canvasElement = document.getElementById('output-canvas');
             const controlsPanel = document.getElementById('controls-panel');
             const menuButton = document.getElementById('menu-button');
+            const minimizeBtn = document.getElementById('minimize-btn');
             const canvasCtx = canvasElement.getContext('2d');
             const modeSelect = document.getElementById('mode-select');
             const volumeSlider = document.getElementById('volume-slider');
             const reverbSlider = document.getElementById('reverb-slider');
+            const volumeValueSpan = document.getElementById('volume-value');
+            const reverbValueSpan = document.getElementById('reverb-value');
+            const handStatusIndicator = document.getElementById('hand-status-indicator');
+            const handStatusText = document.getElementById('hand-status-text');
+            const audioLevelBars = Array.from(document.getElementById('audio-level-container').children);
+            const resetBtn = document.getElementById('reset-btn');
+            const stopBtn = document.getElementById('stop-btn');
             
-            let scene, camera, renderer, cubesGroup, handCursor1, handCursor2, currentSynth, reverb, audioMeter, handLandmarker;
+            let scene, camera, renderer, cubesGroup, particles, handCursor1, handCursor2, currentSynth, reverb, audioMeter;
             const raycaster = new THREE.Raycaster();
             const handPointers = [new THREE.Vector2(), new THREE.Vector2()];
             const activeEffects = [];
@@ -353,24 +420,33 @@
             
             let isAudioInitialized = false;
             let lastVideoTime = -1;
-            let lastPredictionTime = 0;
-            let isDragging = false;
-            let videoStream;
+            let videoStream = null;
+            let animationFrameId = null;
+            let handLandmarker;
+            let latestHandLandmarks = null;
+            
+            const isMobile = () => /Android|webOS|iPhone|iPad|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            const initialCameraPos = isMobile() ? CAMERA_POSITION_Z_MOBILE : CAMERA_POSITION_Z_DESKTOP;
+            let isGrabbing = false;
             const previousMousePosition = { x: 0, y: 0 };
-            const isMobile = () => /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-            let lastTouchDistance = null;
+            
+            // Estado de arrastre para los paneles
+            const dragState = {
+                isDragging: false,
+                target: null,
+                startX: 0,
+                startY: 0,
+                currentX: 0,
+                currentY: 0,
+                initialLeft: 0,
+                initialTop: 0,
+            };
 
             // --- MAPA DE MODOS DE SONIDO ---
             const synthModes = {
                 'sintetizador': () => new Tone.PolySynth(Tone.Synth, { oscillator: { type: "fatsawtooth" }, envelope: { attack: 0.01, decay: 0.4, sustain: 0.2, release: 0.8 } }),
                 'piano': () => new Tone.PolySynth(Tone.FMSynth, { modulationIndex: 10, envelope: { attack: 0.01, decay: 0.5, sustain: 0.1, release: 1 }, oscillator: { type: 'sine' } }),
-                'organo': () => new Tone.PolySynth(Tone.AMSynth, { harmonicity: 2.5, envelope: { attack: 0.01, decay: 0.4, sustain: 1, release: 0.8 }, modulation: { type: "square" } }),
-                'cuerdas': () => new Tone.PolySynth(Tone.Synth, { oscillator: { type: "sine" }, envelope: { attack: 2, decay: 0.5, sustain: 0.8, release: 3 } }),
-                'experimental': () => new Tone.NoiseSynth({
-                    noise: { type: 'pink' },
-                    envelope: { attack: 0.005, decay: 0.1, sustain: 0 }
-                }).chain(new Tone.BitCrusher(4), Tone.Destination),
-                'percusiones': () => new Tone.PolySynth(Tone.MembraneSynth, { envelope: { attack: 0.01, decay: 0.4, sustain: 0.1, release: 0.8 } })
+                'cuerdas': () => new Tone.PolySynth(Tone.Synth, { oscillator: { type: "sine" }, envelope: { attack: 2, decay: 0.5, sustain: 0.8, release: 3 } })
             };
 
             // --- INICIALIZACIÓN DE TRES.JS ---
@@ -378,6 +454,8 @@
                 scene = new THREE.Scene();
                 scene.background = new THREE.Color(0x0a0a0a);
                 camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+                camera.position.z = initialCameraPos;
+                
                 renderer = new THREE.WebGLRenderer({ antialias: true });
                 renderer.setPixelRatio(window.devicePixelRatio);
                 renderer.setSize(window.innerWidth, window.innerHeight);
@@ -401,10 +479,29 @@
                         (Math.floor(i / GRID_SIZE) % GRID_SIZE - (GRID_SIZE - 1) / 2) * CUBE_SPACING,
                         (Math.floor(i / (GRID_SIZE * GRID_SIZE)) - (GRID_SIZE - 1) / 2) * CUBE_SPACING
                     );
-                    cube.userData = { originalIndex: i, lastTriggered: 0 };
+                    cube.userData = { originalIndex: i, lastTriggered: 0, originalScale: cube.scale.clone() };
                     cubesGroup.add(cube);
                 }
                 scene.add(cubesGroup);
+
+                // Crear sistema de partículas
+                const particleCount = 2000;
+                const particleGeometry = new THREE.BufferGeometry();
+                const positions = new Float32Array(particleCount * 3);
+                const particleMaterials = new THREE.PointsMaterial({
+                    color: 0x888888,
+                    size: 0.1,
+                    sizeAttenuation: true,
+                    blending: THREE.AdditiveBlending,
+                    transparent: true,
+                    opacity: 0.7
+                });
+                for (let i = 0; i < particleCount * 3; i++) {
+                    positions[i] = (Math.random() - 0.5) * 200;
+                }
+                particleGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+                particles = new THREE.Points(particleGeometry, particleMaterials);
+                scene.add(particles);
                 
                 const cursorGeometry = new THREE.SphereGeometry(0.15, 16, 16);
                 handCursor1 = new THREE.Mesh(cursorGeometry, new THREE.MeshBasicMaterial({ color: 0xff4444 }));
@@ -414,7 +511,10 @@
             }
 
             // --- INICIALIZACIÓN DE TONE.JS ---
-            function initTone() {
+            async function initTone() {
+                if (Tone.context.state !== 'running') {
+                    await Tone.start();
+                }
                 reverb = new Tone.Reverb({ decay: 5, wet: 0.5 }).toDestination();
                 audioMeter = new Tone.Meter();
                 isAudioInitialized = true;
@@ -424,11 +524,7 @@
                 if (currentSynth) { currentSynth.dispose(); }
                 const newSynth = synthModes[mode]();
                 
-                if (mode !== 'experimental') {
-                    newSynth.chain(reverb, audioMeter, Tone.Destination);
-                } else {
-                    newSynth.connect(audioMeter).toDestination();
-                }
+                newSynth.chain(reverb, audioMeter, Tone.Destination);
                 currentSynth = newSynth;
             }
 
@@ -450,74 +546,64 @@
                 } catch (error) {
                     console.error("Error al cargar modelo de MediaPipe:", error);
                     startButton.textContent = "Error al Cargar";
+                    startButton.style.backgroundColor = 'red';
                 }
             }
 
-            // --- BUCLE PRINCIPAL DE PREDICCIÓN Y RENDERIZADO ---
+            let lastPredictTime = 0;
             function predictWebcam() {
+                animationFrameId = requestAnimationFrame(predictWebcam);
                 if (!videoStream || videoElement.readyState < 2 || !handLandmarker) {
-                    requestAnimationFrame(predictWebcam);
                     return;
                 }
                 const now = performance.now();
-                if (now - lastPredictionTime > PREDICTION_INTERVAL && lastVideoTime !== videoElement.currentTime) {
-                    lastPredictionTime = now;
-                    lastVideoTime = videoElement.currentTime;
+                if (now - lastPredictTime > PREDICTION_INTERVAL) {
                     const results = handLandmarker.detectForVideo(videoElement, now);
+                    latestHandLandmarks = results.landmarks;
                     
                     canvasCtx.save();
                     canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-                    updateHandStatus(results.landmarks.length);
-                    handCursor1.visible = handCursor2.visible = false;
+                    updateHandStatus(latestHandLandmarks.length);
 
-                    if (results.landmarks.length > 0) {
+                    if (latestHandLandmarks.length > 0) {
                         canvasCtx.save();
                         canvasCtx.scale(-1, 1);
                         canvasCtx.translate(-canvasElement.width, 0);
                         const drawingUtils = new DrawingUtils(canvasCtx);
-                        results.landmarks.forEach((landmarks, i) => {
+                        latestHandLandmarks.forEach((landmarks, i) => {
                             const handedness = results.handednesses[i][0].categoryName;
                             const isRightHand = handedness === 'Right';
                             drawingUtils.drawLandmarks(landmarks, { color: isRightHand ? "#FF0000" : "#0000FF", lineWidth: 2, radius: 4 });
                             drawingUtils.drawConnectors(landmarks, HandLandmarker.HAND_CONNECTIONS, { color: "#FFFFFF", lineWidth: 2 });
-                            
-                            const cursor = isRightHand ? handCursor1 : handCursor2;
-                            const pointer = handPointers[isRightHand ? 0 : 1];
-                            const indexTip = landmarks[8];
-                            pointer.x = 1 - (indexTip.x * 2);
-                            pointer.y = 1 - (indexTip.y * 2);
-                            cursor.visible = true;
-                            const vec = new THREE.Vector3(pointer.x, pointer.y, 0.5).unproject(camera);
-                            const dir = vec.sub(camera.position).normalize();
-                            cursor.position.copy(camera.position.clone().add(dir.multiplyScalar(-camera.position.z / dir.z)));
                         });
                         canvasCtx.restore();
                     }
                     canvasCtx.restore();
+                    lastPredictTime = now;
                 }
-                requestAnimationFrame(predictWebcam);
             }
             
+            let animateFrameId = null;
             function animate() {
-                requestAnimationFrame(animate);
+                animateFrameId = requestAnimationFrame(animate);
                 
-                if (!isDragging) {
+                if (!isGrabbing) {
                     cubesGroup.rotation.y += ROTATION_SPEED;
                     cubesGroup.rotation.x += ROTATION_SPEED / 2;
                 }
-
-                checkHandInteraction(handCursor1, handPointers[0]);
-                checkHandInteraction(handCursor2, handPointers[1]);
+                
+                processHandInteraction();
+                updateAudioReactiveParticles();
                 updateAudioMeter();
 
                 for (let i = activeEffects.length - 1; i >= 0; i--) {
                     const effect = activeEffects[i];
                     effect.life -= 0.03;
-                    effect.mesh.scale.lerp(effect.originalScale, 0.08);
+                    effect.mesh.scale.lerp(effect.mesh.userData.originalScale, 0.08);
                     effect.mesh.material.color.lerp(baseCubeColor, 0.07);
                     effect.mesh.material.emissive.lerp(blackColor, 0.07);
                     if (effect.life <= 0) {
-                        Object.assign(effect.mesh.scale, effect.originalScale);
+                        effect.mesh.scale.copy(effect.mesh.userData.originalScale);
                         effect.mesh.material.color.copy(baseCubeColor);
                         effect.mesh.material.emissive.copy(blackColor);
                         activeEffects.splice(i, 1);
@@ -526,242 +612,298 @@
                 renderer.render(scene, camera);
             }
 
-            // --- LÓGICA DE INTERACCIÓN ---
-            const notes = ["C3", "D3", "E3", "G3", "A3", "C4", "D4", "E4", "G4", "A4"];
-            const percussionNotes = ["C1", "D1", "E1", "F1", "G1", "A1", "B1", "C2", "D2", "E2"];
+            function processHandInteraction() {
+                handCursor1.visible = handCursor2.visible = false;
+                if (!latestHandLandmarks || !isAudioInitialized || !currentSynth) {
+                    return;
+                }
+                
+                latestHandLandmarks.forEach((landmarks, i) => {
+                    const isRightHand = i === 0; // Simple assumption, can be improved with handedness data
+                    const cursor = isRightHand ? handCursor1 : handCursor2;
+                    const pointer = handPointers[isRightHand ? 0 : 1];
+                    const indexTip = landmarks[8]; // Index finger tip
+                    
+                    pointer.x = (1 - indexTip.x) * 2 - 1;
+                    pointer.y = -(indexTip.y * 2 - 1);
+                    cursor.visible = true;
+                    
+                    const vec = new THREE.Vector3(pointer.x, pointer.y, 0.5).unproject(camera);
+                    const dir = vec.sub(camera.position).normalize();
+                    const distance = -camera.position.z / dir.z;
+                    cursor.position.copy(camera.position).add(dir.multiplyScalar(distance));
+                    
+                    checkCubeCollision(cursor, pointer);
+                });
+            }
+            
+            function updateAudioReactiveParticles() {
+                if (!isAudioInitialized || !particles) return;
 
-            function checkHandInteraction(cursor, pointer) {
-                if (!cursor.visible || !isAudioInitialized || !currentSynth) return;
+                const normalizedLevel = Tone.dbToGain(audioMeter.getValue());
+                
+                const positions = particles.geometry.attributes.position.array;
+                const particleCount = positions.length / 3;
+                const speed = normalizedLevel * 0.1;
+                const size = 0.1 + normalizedLevel * 0.5;
+
+                particles.material.size = size;
+
+                for (let i = 0; i < particleCount; i++) {
+                    const i3 = i * 3;
+                    
+                    positions[i3] += (Math.random() - 0.5) * speed;
+                    positions[i3 + 1] += (Math.random() - 0.5) * speed;
+                    positions[i3 + 2] += (Math.random() - 0.5) * speed;
+                    
+                    if (Math.abs(positions[i3]) > 100 || Math.abs(positions[i3 + 1]) > 100 || Math.abs(positions[i3 + 2]) > 100) {
+                        positions[i3] = (Math.random() - 0.5) * 50;
+                        positions[i3 + 1] = (Math.random() - 0.5) * 50;
+                        positions[i3 + 2] = (Math.random() - 0.5) * 50;
+                    }
+                }
+                particles.geometry.attributes.position.needsUpdate = true;
+            }
+
+            const notes = ["C3", "D3", "E3", "G3", "A3", "C4", "D4", "E4", "G4", "A4", "C5", "D5", "E5"];
+
+            function checkCubeCollision(cursor, pointer) {
+                if (!cursor.visible) return;
                 raycaster.setFromCamera(pointer, camera);
                 const intersects = raycaster.intersectObjects(cubesGroup.children, false);
                 if (intersects.length > 0) {
                     const cube = intersects[0].object;
                     const now = Date.now();
                     if (now - cube.userData.lastTriggered > NOTE_COOLDOWN) {
-                        const mode = modeSelect.value;
-                        let note;
-                        if (mode === 'percusiones') {
-                             note = percussionNotes[cube.userData.originalIndex % percussionNotes.length];
-                        } else {
-                            note = notes[cube.userData.originalIndex % notes.length];
-                        }
-                        
-                        if (mode === 'experimental') {
-                            currentSynth.triggerAttackRelease("16n");
-                        } else {
-                            currentSynth.triggerAttackRelease(note, "8n", Tone.now());
-                        }
-
-                        triggerVisualEffect(cube, note);
+                        const note = notes[cube.userData.originalIndex % notes.length];
+                        currentSynth.triggerAttackRelease(note, "8n", Tone.now());
+                        triggerVisualEffect(cube);
                         cube.userData.lastTriggered = now;
                     }
                 }
             }
 
-            function triggerVisualEffect(cube, note) {
-                const color = colorPalette[notes.indexOf(note) % colorPalette.length];
-                const existing = activeEffects.find(e => e.mesh === cube);
-                if (existing) { existing.life = 1; return; }
-                activeEffects.push({ mesh: cube, originalScale: cube.scale.clone(), life: 1 });
-                cube.material.color.set(color);
-                cube.material.emissive.set(color);
-                cube.scale.set(1.6, 1.6, 1.6);
+            function triggerVisualEffect(cube) {
+                const randomColor = colorPalette[Math.floor(Math.random() * colorPalette.length)];
+                cube.material.color.copy(randomColor);
+                cube.material.emissive.copy(randomColor).multiplyScalar(0.5);
+                cube.scale.copy(cube.userData.originalScale).multiplyScalar(1.5);
+
+                const existingEffect = activeEffects.find(e => e.mesh === cube);
+                if (existingEffect) {
+                    existingEffect.life = 1.0;
+                } else {
+                    activeEffects.push({ mesh: cube, life: 1.0 });
+                }
             }
             
-            // --- MANEJADORES DE UI Y EVENTOS ---
-            function setupEventListeners() {
-                document.getElementById('reset-btn').addEventListener('click', () => {
-                    cubesGroup.rotation.set(0, 0, 0);
-                    onWindowResize();
-                });
-                document.getElementById('stop-btn').addEventListener('click', stopExperience);
-                document.getElementById('fullscreen-btn').addEventListener('click', toggleFullScreen);
-                startButton.addEventListener('click', startExperience);
-                
-                document.getElementById('collapse-btn').addEventListener('click', () => {
-                    controlsPanel.classList.add('collapsed');
-                    menuButton.classList.remove('hidden');
-                    cameraContainer.style.opacity = '0';
-                });
-                menuButton.addEventListener('click', () => {
-                    controlsPanel.classList.remove('collapsed');
-                    menuButton.classList.add('hidden');
-                    cameraContainer.style.opacity = '1';
-                });
-
-                // Escuchadores de los controles de sonido
-                modeSelect.addEventListener('change', (e) => setupAudio(e.target.value));
-                volumeSlider.addEventListener('input', (e) => {
-                    const volumePercent = e.target.value;
-                    const volumeDb = Tone.dbToGain(volumePercent / 100 * 20 - 20);
-                    Tone.Destination.volume.value = volumeDb;
-                    document.getElementById('volume-value').textContent = `${volumePercent}%`;
-                });
-                reverbSlider.addEventListener('input', (e) => {
-                    const wetValue = e.target.value / 100;
-                    reverb.wet.value = wetValue;
-                    document.getElementById('reverb-value').textContent = `${e.target.value}%`;
-                });
-
-                // Eventos de redimensionamiento de ventana
-                window.addEventListener('resize', onWindowResize, false);
-                
-                // Eventos de arrastre y zoom con el mouse y el tacto
-                container.addEventListener('mousedown', (e) => onDragStart(e.clientX, e.clientY));
-                container.addEventListener('mousemove', (e) => onDragMove(e.clientX, e.clientY));
-                container.addEventListener('mouseup', onDragEnd);
-                container.addEventListener('mouseleave', onDragEnd);
-                container.addEventListener('wheel', onMouseWheel, { passive: false });
-                
-                container.addEventListener('touchstart', (e) => {
-                    e.preventDefault();
-                    if (e.touches.length === 2) {
-                        lastTouchDistance = getTouchDistance(e.touches[0], e.touches[1]);
-                    } else if (e.touches.length === 1) {
-                        onDragStart(e.touches[0].clientX, e.touches[0].clientY);
-                    }
-                }, { passive: false });
-                container.addEventListener('touchmove', (e) => {
-                    e.preventDefault();
-                    if (e.touches.length === 2) {
-                        const newDistance = getTouchDistance(e.touches[0], e.touches[1]);
-                        if (lastTouchDistance !== null) {
-                            const delta = newDistance - lastTouchDistance;
-                            onZoom(delta);
-                        }
-                        lastTouchDistance = newDistance;
-                    } else if (e.touches.length === 1) {
-                        onDragMove(e.touches[0].clientX, e.touches[0].clientY);
-                    }
-                }, { passive: false });
-                container.addEventListener('touchend', () => {
-                    onDragEnd();
-                    lastTouchDistance = null;
-                });
+            async function setupWebcam() {
+                try {
+                    const constraints = { video: { width: 640, height: 480 } };
+                    videoStream = await navigator.mediaDevices.getUserMedia(constraints);
+                    videoElement.srcObject = videoStream;
+                    videoElement.addEventListener("loadeddata", () => {
+                        canvasElement.width = videoElement.videoWidth;
+                        canvasElement.height = videoElement.videoHeight;
+                    });
+                } catch (err) {
+                    console.error("Error al acceder a la cámara:", err);
+                    alert("No se pudo acceder a la cámara. La detección de manos no funcionará.");
+                }
             }
 
             async function startExperience() {
+                overlay.style.opacity = '0';
+                overlay.style.pointerEvents = 'none';
+
                 if (!isAudioInitialized) {
-                    initTone();
-                    setupAudio(modeSelect.value);
+                    await initTone();
                 }
-                await Tone.start();
-                try {
-                    const videoConstraints = {
-                        width: { ideal: 640 },
-                        height: { ideal: 480 },
-                        facingMode: isMobile() ? 'user' : 'environment'
-                    };
-                    videoStream = await navigator.mediaDevices.getUserMedia({ video: videoConstraints });
-                    videoElement.srcObject = videoStream;
-                    videoElement.onloadeddata = () => {
-                        overlay.style.opacity = '0';
-                        cameraContainer.style.display = 'block';
-                        controlsPanel.style.display = 'block';
-                        setTimeout(() => overlay.style.display = 'none', 800);
-                        predictWebcam();
-                    };
-                } catch (err) {
-                    console.error("Error al acceder a la cámara:", err);
-                    const messageBox = document.createElement('div');
-                    messageBox.className = 'absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-red-800 text-white p-4 rounded-lg shadow-lg z-50';
-                    messageBox.textContent = "Error: No se pudo acceder a la cámara. Por favor, revisa los permisos.";
-                    document.body.appendChild(messageBox);
-                    setTimeout(() => messageBox.remove(), 5000);
-                }
+                setupAudio(modeSelect.value);
+                await setupWebcam();
+                
+                predictWebcam();
+                animate();
+
+                setTimeout(() => {
+                    controlsPanel.style.display = 'block';
+                    cameraContainer.style.display = 'block';
+                }, 800);
             }
 
             function stopExperience() {
-                if (videoStream) videoStream.getTracks().forEach(track => track.stop());
-                videoStream = null;
-                overlay.style.display = 'flex';
-                setTimeout(() => overlay.style.opacity = '1', 50);
-                cameraContainer.style.display = 'none';
-                controlsPanel.style.display = 'none';
-                menuButton.classList.add('hidden');
-                handCursor1.visible = handCursor2.visible = false;
-                updateHandStatus(0);
-                if (document.fullscreenElement) document.exitFullscreen();
-            }
-            
-            function toggleFullScreen() {
-                if (!document.fullscreenElement) {
-                    document.documentElement.requestFullscreen().catch(err => console.error(`Error activating full screen: ${err.message}`));
-                } else {
-                    document.exitFullscreen();
+                overlay.style.opacity = '1';
+                overlay.style.pointerEvents = 'auto';
+                
+                if (videoStream) {
+                    videoStream.getTracks().forEach(track => track.stop());
+                    videoStream = null;
                 }
+                
+                cancelAnimationFrame(animationFrameId);
+                cancelAnimationFrame(animateFrameId);
+                animationFrameId = null;
+                animateFrameId = null;
+                
+                controlsPanel.style.display = 'none';
+                cameraContainer.style.display = 'none';
+                menuButton.style.display = 'none';
+                
+                latestHandLandmarks = null;
+                updateHandStatus(0);
             }
 
-            function updateHandStatus(handCount) {
-                const indicator = document.getElementById('hand-status-indicator');
-                const text = document.getElementById('hand-status-text');
-                indicator.style.backgroundColor = handCount > 0 ? '#22c55e' : '#6b7280';
-                text.textContent = handCount > 0 ? `${handCount} mano${handCount > 1 ? 's' : ''} detectada${handCount > 1 ? 's' : ''}` : 'No se detectan manos';
+            function updateHandStatus(numHands) {
+                if (numHands > 0) {
+                    handStatusIndicator.style.backgroundColor = 'var(--brand-color)';
+                    handStatusText.textContent = `${numHands} mano${numHands > 1 ? 's' : ''} detectada${numHands > 1 ? 's' : ''}`;
+                } else {
+                    handStatusIndicator.style.backgroundColor = '#6b7280'; // gray-500
+                    handStatusText.textContent = 'No se detectan manos';
+                }
             }
             
             function updateAudioMeter() {
                 if (!isAudioInitialized) return;
                 const level = Tone.dbToGain(audioMeter.getValue());
-                const bars = document.querySelectorAll('#audio-level-container div');
-                bars.forEach((bar, i) => {
-                    bar.style.backgroundColor = i < level * bars.length ? '#4f46e5' : '#4b5563';
+                const activeBars = Math.ceil(level * audioLevelBars.length * 2);
+                audioLevelBars.forEach((bar, index) => {
+                    bar.classList.toggle('active', index < activeBars);
                 });
             }
 
             function onWindowResize() {
-                const width = window.innerWidth;
-                const height = window.innerHeight;
-                camera.aspect = width / height;
+                camera.aspect = window.innerWidth / window.innerHeight;
                 camera.updateProjectionMatrix();
-                renderer.setSize(width, height);
-                cubesGroup.position.set(0, 0, 0);
-                camera.position.z = (isMobile() && height > width) ? CAMERA_POSITION_Z_MOBILE : CAMERA_POSITION_Z_DESKTOP;
-            }
-            function onMouseWheel(e) { 
-                e.preventDefault();
-                onZoom(-e.deltaY);
-            }
-            function onDragStart(x, y) {
-                isDragging = true;
-                container.classList.add('grabbing');
-                previousMousePosition.x = x;
-                previousMousePosition.y = y;
-            }
-            function onDragMove(x, y) {
-                if (!isDragging) return;
-                cubesGroup.rotation.y += (x - previousMousePosition.x) * 0.005;
-                cubesGroup.rotation.x += (y - previousMousePosition.y) * 0.005;
-                previousMousePosition.x = x;
-                previousMousePosition.y = y;
-            }
-            function onDragEnd() {
-                isDragging = false;
-                container.classList.remove('grabbing');
-            }
-            function getTouchDistance(touch1, touch2) {
-                const dx = touch1.clientX - touch2.clientX;
-                const dy = touch1.clientY - touch2.clientY;
-                return Math.sqrt(dx * dx + dy * dy);
-            }
-            function onZoom(delta) {
-                const zoomSpeed = 0.01;
-                const newFov = camera.fov - delta * zoomSpeed;
-                camera.fov = Math.max(10, Math.min(100, newFov));
-                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
             }
 
-            // --- EJECUCIÓN INICIAL ---
-            function main() {
-                initThree();
-                animate();
-                setupEventListeners();
-                onWindowResize();
-                startButton.disabled = true;
-                startButton.textContent = "Cargando Modelos...";
-                createHandLandmarker();
+            function handleMouseDown(event) {
+                isGrabbing = true;
+                container.classList.add('grabbing');
+                previousMousePosition.x = event.clientX || event.touches[0].clientX;
+                previousMousePosition.y = event.clientY || event.touches[0].clientY;
             }
-            main();
+
+            function handleMouseMove(event) {
+                if (!isGrabbing) return;
+                const clientX = event.clientX || event.touches[0].clientX;
+                const clientY = event.clientY || event.touches[0].clientY;
+                const deltaX = clientX - previousMousePosition.x;
+                const deltaY = clientY - previousMousePosition.y;
+
+                cubesGroup.rotation.y += deltaX * 0.005;
+                cubesGroup.rotation.x += deltaY * 0.005;
+
+                previousMousePosition.x = clientX;
+                previousMousePosition.y = clientY;
+            }
+
+            function handleMouseUp() {
+                isGrabbing = false;
+                container.classList.remove('grabbing');
+            }
+            
+            // --- LÓGICA DE PANELES ARRASTRABLES ---
+            function onDragStart(event) {
+                const target = event.target.closest('.draggable');
+                // Salir si no es un elemento arrastrable o si se está interactuando con un control
+                if (!target || event.target.tagName === 'BUTTON' || event.target.tagName === 'INPUT' || event.target.tagName === 'SELECT') return;
+
+                // Para el panel de control, solo permitir arrastrar desde la barra de título
+                if (target.id === 'controls-panel' && !event.target.closest('.cursor-grab')) {
+                    return;
+                }
+
+                event.preventDefault();
+                dragState.isDragging = true;
+                dragState.target = target;
+                target.classList.add('dragging');
+                
+                const touch = event.touches ? event.touches[0] : event;
+                dragState.startX = touch.clientX;
+                dragState.startY = touch.clientY;
+                
+                // Obtener la transformación actual para calcular el nuevo desplazamiento a partir de ella
+                const style = window.getComputedStyle(target);
+                const matrix = new DOMMatrix(style.transform);
+                dragState.initialLeft = matrix.m41;
+                dragState.initialTop = matrix.m42;
+            }
+
+            function onDragMove(event) {
+                if (!dragState.isDragging) return;
+                
+                const touch = event.touches ? event.touches[0] : event;
+                const deltaX = touch.clientX - dragState.startX;
+                const deltaY = touch.clientY - dragState.startY;
+                
+                dragState.currentX = dragState.initialLeft + deltaX;
+                dragState.currentY = dragState.initialTop + deltaY;
+                
+                dragState.target.style.transform = `translate(${dragState.currentX}px, ${dragState.currentY}px)`;
+            }
+
+            function onDragEnd() {
+                if (!dragState.isDragging) return;
+                dragState.isDragging = false;
+                dragState.target.classList.remove('dragging');
+                dragState.target = null;
+            }
+            
+            // --- EVENT LISTENERS ---
+            startButton.addEventListener('click', startExperience);
+            stopBtn.addEventListener('click', stopExperience);
+            window.addEventListener('resize', onWindowResize);
+            
+            container.addEventListener('mousedown', handleMouseDown);
+            window.addEventListener('mousemove', handleMouseMove);
+            window.addEventListener('mouseup', handleMouseUp);
+            container.addEventListener('touchstart', handleMouseDown, { passive: false });
+            window.addEventListener('touchmove', handleMouseMove, { passive: false });
+            window.addEventListener('touchend', handleMouseUp);
+            
+            document.addEventListener('mousedown', onDragStart);
+            document.addEventListener('mousemove', onDragMove);
+            document.addEventListener('mouseup', onDragEnd);
+            document.addEventListener('touchstart', onDragStart, { passive: false });
+            document.addEventListener('touchmove', onDragMove, { passive: false });
+            document.addEventListener('touchend', onDragEnd);
+
+            modeSelect.addEventListener('change', (e) => {
+                if(isAudioInitialized) setupAudio(e.target.value);
+            });
+            volumeSlider.addEventListener('input', (e) => {
+                const volume = parseFloat(e.target.value);
+                const db = Tone.gainToDb(volume / 100);
+                Tone.Destination.volume.value = db;
+                volumeValueSpan.textContent = `${volume}%`;
+            });
+            reverbSlider.addEventListener('input', (e) => {
+                if (reverb) reverb.wet.value = parseFloat(e.target.value) / 100;
+                reverbValueSpan.textContent = `${e.target.value}%`;
+            });
+            resetBtn.addEventListener('click', () => {
+                camera.position.z = initialCameraPos;
+                camera.position.x = 0;
+                camera.position.y = 0;
+                camera.lookAt(scene.position);
+                cubesGroup.rotation.set(0, 0, 0);
+            });
+            minimizeBtn.addEventListener('click', () => {
+                controlsPanel.style.display = 'none';
+                menuButton.style.display = 'flex';
+            });
+            menuButton.addEventListener('click', () => {
+                controlsPanel.style.display = 'block';
+                menuButton.style.display = 'none';
+            });
+
+            // --- INICIO ---
+            initThree();
+            createHandLandmarker();
         });
     </script>
 </body>
 </html>
+
