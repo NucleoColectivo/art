@@ -31,6 +31,7 @@
             width: 100vw;
             height: 100vh;
             cursor: grab;
+            touch-action: none; /* Evita el zoom/scroll del navegador en el canvas */
         }
         #container.grabbing {
             cursor: grabbing;
@@ -802,14 +803,14 @@
             function handleMouseDown(event) {
                 isGrabbing = true;
                 container.classList.add('grabbing');
-                previousMousePosition.x = event.clientX || event.touches[0].clientX;
-                previousMousePosition.y = event.clientY || event.touches[0].clientY;
+                previousMousePosition.x = event.clientX;
+                previousMousePosition.y = event.clientY;
             }
 
             function handleMouseMove(event) {
                 if (!isGrabbing) return;
-                const clientX = event.clientX || event.touches[0].clientX;
-                const clientY = event.clientY || event.touches[0].clientY;
+                const clientX = event.clientX;
+                const clientY = event.clientY;
                 const deltaX = clientX - previousMousePosition.x;
                 const deltaY = clientY - previousMousePosition.y;
 
@@ -825,15 +826,60 @@
                 container.classList.remove('grabbing');
             }
             
+            // --- LÓGICA DE INTERACCIÓN TÁCTIL (ROTACIÓN Y ZOOM) ---
+            let initialPinchDistance = 0;
+
+            function handleTouchStart(event) {
+                if (event.touches.length > 1) {
+                    event.preventDefault();
+                }
+
+                if (event.touches.length === 1) {
+                    handleMouseDown(event.touches[0]);
+                } else if (event.touches.length === 2) {
+                    isGrabbing = false;
+                    container.classList.remove('grabbing');
+                    const dx = event.touches[0].clientX - event.touches[1].clientX;
+                    const dy = event.touches[0].clientY - event.touches[1].clientY;
+                    initialPinchDistance = Math.sqrt(dx * dx + dy * dy);
+                }
+            }
+
+            function handleTouchMove(event) {
+                 if (event.touches.length > 1) {
+                    event.preventDefault();
+                }
+
+                if (event.touches.length === 1) {
+                    handleMouseMove(event.touches[0]);
+                } else if (event.touches.length === 2 && initialPinchDistance > 0) {
+                    const dx = event.touches[0].clientX - event.touches[1].clientX;
+                    const dy = event.touches[0].clientY - event.touches[1].clientY;
+                    const currentDistance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    const zoomFactor = currentDistance / initialPinchDistance;
+                    camera.position.z /= zoomFactor;
+                    
+                    camera.position.z = Math.max(5, Math.min(camera.position.z, 50));
+                    
+                    initialPinchDistance = currentDistance;
+                }
+            }
+
+            function handleTouchEnd(event) {
+                initialPinchDistance = 0;
+                if (event.touches.length < 2) {
+                    handleMouseUp();
+                }
+            }
+
             // --- LÓGICA DE PANELES ARRASTRABLES ---
             function onDragStart(event) {
                 const target = event.target.closest('.draggable');
-                // Salir si no es un elemento arrastrable o si se está interactuando con un control
                 if (!target || event.target.closest('button') || event.target.closest('input') || event.target.closest('select')) {
                     return;
                 }
 
-                // Para el panel de control, solo permitir arrastrar desde la barra de título
                 if (target.id === 'controls-panel' && !event.target.closest('.cursor-grab')) {
                     return;
                 }
@@ -847,7 +893,6 @@
                 dragState.startX = touch.clientX;
                 dragState.startY = touch.clientY;
                 
-                // Obtener la transformación actual para calcular el nuevo desplazamiento a partir de ella
                 const style = window.getComputedStyle(target);
                 const matrix = new DOMMatrix(style.transform);
                 dragState.initialLeft = matrix.m41;
@@ -879,12 +924,15 @@
             stopBtn.addEventListener('click', stopExperience);
             window.addEventListener('resize', onWindowResize);
             
+            // Listeners para Ratón
             container.addEventListener('mousedown', handleMouseDown);
             window.addEventListener('mousemove', handleMouseMove);
             window.addEventListener('mouseup', handleMouseUp);
-            container.addEventListener('touchstart', handleMouseDown, { passive: false });
-            window.addEventListener('touchmove', handleMouseMove, { passive: false });
-            window.addEventListener('touchend', handleMouseUp);
+            
+            // Listeners para Táctil
+            container.addEventListener('touchstart', handleTouchStart, { passive: false });
+            window.addEventListener('touchmove', handleTouchMove, { passive: false });
+            window.addEventListener('touchend', handleTouchEnd);
             
             document.addEventListener('mousedown', onDragStart);
             document.addEventListener('mousemove', onDragMove);
@@ -929,3 +977,4 @@
     </script>
 </body>
 </html>
+
