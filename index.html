@@ -494,6 +494,7 @@
                 'piano': () => new Tone.PolySynth(Tone.FMSynth, { modulationIndex: 10, envelope: { attack: 0.01, decay: 0.5, sustain: 0.1, release: 1 }, oscillator: { type: 'sine' } }),
                 'cuerdas': () => new Tone.PolySynth(Tone.Synth, { oscillator: { type: "sine" }, envelope: { attack: 2, decay: 0.5, sustain: 0.8, release: 3 } })
             };
+            const musicalScale = ["C4", "D4", "E4", "G4", "A4", "C5"];
 
             // --- INICIALIZACIÓN DE TRES.JS ---
             function initThree() {
@@ -665,290 +666,93 @@
                 }
                 
                 latestHandLandmarks.forEach((landmarks, i) => {
-                    const isRightHand = i === 0; // Simple assumption, can be improved with handedness data
-                    const cursor = isRightHand ? handCursor1 : handCursor2;
-                    const pointer = handPointers[isRightHand ? 0 : 1];
-                    const indexTip = landmarks[8]; // Index finger tip
+                    // Usar la punta del dedo índice (landmark 8)
+                    const indexFingerTip = landmarks[8];
                     
-                    pointer.x = (1 - indexTip.x) * 2 - 1;
-                    pointer.y = -(indexTip.y * 2 - 1);
+                    // Convertir coordenadas de la cámara (0-1) a coordenadas normalizadas de dispositivo (-1 a +1)
+                    // La cámara de video está reflejada, por lo que invertimos la coordenada X
+                    const x = (1 - indexFingerTip.x) * 2 - 1;
+                    const y = indexFingerTip.y * 2 - 1;
+                    
+                    handPointers[i].set(x, -y); // Invertir Y para que coincida con el sistema de coordenadas de Three.js
+
+                    // Actualizar la posición del cursor visual
+                    const cursor = i === 0 ? handCursor1 : handCursor2;
                     cursor.visible = true;
+                    raycaster.setFromCamera(handPointers[i], camera);
+                    const intersects = raycaster.intersectObjects(cubesGroup.children);
                     
-                    const vec = new THREE.Vector3(pointer.x, pointer.y, 0.5).unproject(camera);
-                    const dir = vec.sub(camera.position).normalize();
+                    if (intersects.length > 0) {
+                        const intersectedCube = intersects[0].object;
+                        const now = performance.now();
+                        if (now - intersectedCube.userData.lastTriggered > NOTE_COOLDOWN) {
+                            
+                            // Aumentar la escala del cubo al ser tocado
+                            const newScale = intersectedCube.userData.originalScale.clone().multiplyScalar(1.2);
+                            intersectedCube.scale.copy(newScale);
+
+                            // Cambiar el color del cubo y añadir un efecto de luz
+                            const cubeIndex = intersectedCube.userData.originalIndex;
+                            const colorIndex = cubeIndex % colorPalette.length;
+                            const newColor = colorPalette[colorIndex];
+                            intersectedCube.material.color.copy(newColor);
+                            intersectedCube.material.emissive.copy(newColor).multiplyScalar(0.7);
+                            
+                            // Añadir el efecto a la lista para que se desvanezca
+                            activeEffects.push({ mesh: intersectedCube, life: 1.0 });
+
+                            // Tocar la nota
+                            const noteIndex = cubeIndex % musicalScale.length;
+                            const note = musicalScale[noteIndex];
+                            currentSynth.triggerAttackRelease(note, "8n");
+                            
+                            // Actualizar el tiempo del último trigger
+                            intersectedCube.userData.lastTriggered = now;
+                        }
+                    }
+                    
+                    // Proyectar el cursor en la escena 3D (para visualización)
+                    const vector = new THREE.Vector3(handPointers[i].x, handPointers[i].y, 0.5);
+                    vector.unproject(camera);
+                    const dir = vector.sub(camera.position).normalize();
                     const distance = -camera.position.z / dir.z;
-                    cursor.position.copy(camera.position).add(dir.multiplyScalar(distance));
-                    
-                    checkCubeCollision(cursor, pointer);
+                    const pos = camera.position.clone().add(dir.multiplyScalar(distance));
+                    cursor.position.copy(pos);
                 });
-            }
-            
-            function updateAudioReactiveParticles() {
-                if (!isAudioInitialized || !particles) return;
-
-                const normalizedLevel = Tone.dbToGain(audioMeter.getValue());
-                
-                const positions = particles.geometry.attributes.position.array;
-                const particleCount = positions.length / 3;
-                const speed = normalizedLevel * 0.1;
-                const size = 0.1 + normalizedLevel * 0.5;
-
-                particles.material.size = size;
-
-                for (let i = 0; i < particleCount; i++) {
-                    const i3 = i * 3;
-                    
-                    positions[i3] += (Math.random() - 0.5) * speed;
-                    positions[i3 + 1] += (Math.random() - 0.5) * speed;
-                    positions[i3 + 2] += (Math.random() - 0.5) * speed;
-                    
-                    if (Math.abs(positions[i3]) > 100 || Math.abs(positions[i3 + 1]) > 100 || Math.abs(positions[i3 + 2]) > 100) {
-                        positions[i3] = (Math.random() - 0.5) * 50;
-                        positions[i3 + 1] = (Math.random() - 0.5) * 50;
-                        positions[i3 + 2] = (Math.random() - 0.5) * 50;
-                    }
-                }
-                particles.geometry.attributes.position.needsUpdate = true;
-            }
-
-            const notes = ["C3", "D3", "E3", "G3", "A3", "C4", "D4", "E4", "G4", "A4", "C5", "D5", "E5"];
-
-            function checkCubeCollision(cursor, pointer) {
-                if (!cursor.visible) return;
-                raycaster.setFromCamera(pointer, camera);
-                const intersects = raycaster.intersectObjects(cubesGroup.children, false);
-                if (intersects.length > 0) {
-                    const cube = intersects[0].object;
-                    const now = Date.now();
-                    if (now - cube.userData.lastTriggered > NOTE_COOLDOWN) {
-                        const note = notes[cube.userData.originalIndex % notes.length];
-                        currentSynth.triggerAttackRelease(note, "8n", Tone.now());
-                        triggerVisualEffect(cube);
-                        cube.userData.lastTriggered = now;
-                    }
-                }
-            }
-
-            function triggerVisualEffect(cube) {
-                const randomColor = colorPalette[Math.floor(Math.random() * colorPalette.length)];
-                cube.material.color.copy(randomColor);
-                cube.material.emissive.copy(randomColor).multiplyScalar(0.5);
-                cube.scale.copy(cube.userData.originalScale).multiplyScalar(1.5);
-
-                const existingEffect = activeEffects.find(e => e.mesh === cube);
-                if (existingEffect) {
-                    existingEffect.life = 1.0;
-                } else {
-                    activeEffects.push({ mesh: cube, life: 1.0 });
-                }
-            }
-            
-            async function setupWebcam() {
-                try {
-                    const constraints = { video: { width: 640, height: 480 } };
-                    videoStream = await navigator.mediaDevices.getUserMedia(constraints);
-                    videoElement.srcObject = videoStream;
-                    videoElement.addEventListener("loadeddata", () => {
-                        canvasElement.width = videoElement.videoWidth;
-                        canvasElement.height = videoElement.videoHeight;
-                    });
-                } catch (err) {
-                    console.error("Error al acceder a la cámara:", err);
-                    alert("No se pudo acceder a la cámara. La detección de manos no funcionará.");
-                }
-            }
-
-            async function startExperience() {
-                overlay.style.opacity = '0';
-                overlay.style.pointerEvents = 'none';
-
-                if (!isAudioInitialized) {
-                    await initTone();
-                }
-                setupAudio(modeSelect.value);
-                await setupWebcam();
-                
-                predictWebcam();
-                animate();
-
-                setTimeout(() => {
-                    controlsPanel.style.display = 'block';
-                    cameraContainer.style.display = 'block';
-                }, 800);
-            }
-
-            function stopExperience() {
-                overlay.style.opacity = '1';
-                overlay.style.pointerEvents = 'auto';
-                
-                if (videoStream) {
-                    videoStream.getTracks().forEach(track => track.stop());
-                    videoStream = null;
-                }
-                
-                cancelAnimationFrame(animationFrameId);
-                cancelAnimationFrame(animateFrameId);
-                animationFrameId = null;
-                animateFrameId = null;
-                
-                controlsPanel.style.display = 'none';
-                cameraContainer.style.display = 'none';
-                menuButton.style.display = 'none';
-                
-                latestHandLandmarks = null;
-                updateHandStatus(0);
-
-                startScreen.style.display = 'none';
-                startScreen.style.opacity = '0';
-                welcomeScreen.style.display = 'block';
-                welcomeScreen.style.opacity = '1';
             }
 
             function updateHandStatus(numHands) {
                 if (numHands > 0) {
-                    handStatusIndicator.style.backgroundColor = 'var(--brand-color)';
+                    handStatusIndicator.style.backgroundColor = '#34d399'; // green-500
                     handStatusText.textContent = `${numHands} mano${numHands > 1 ? 's' : ''} detectada${numHands > 1 ? 's' : ''}`;
                 } else {
-                    handStatusIndicator.style.backgroundColor = '#6b7280'; // gray-500
+                    handStatusIndicator.style.backgroundColor = '#9ca3af'; // gray-400
                     handStatusText.textContent = 'No se detectan manos';
                 }
             }
-            
+
             function updateAudioMeter() {
-                if (!isAudioInitialized) return;
-                const level = Tone.dbToGain(audioMeter.getValue());
-                const activeBars = Math.ceil(level * audioLevelBars.length * 2);
+                if (!audioMeter) return;
+                const level = audioMeter.getValue() + 80; // Convertir dB a un rango más manejable
+                const numActiveBars = Math.floor(level / 8);
+                
                 audioLevelBars.forEach((bar, index) => {
-                    bar.classList.toggle('active', index < activeBars);
+                    if (index < numActiveBars) {
+                        bar.classList.add('active');
+                    } else {
+                        bar.classList.remove('active');
+                    }
                 });
             }
 
-            function onWindowResize() {
-                camera.aspect = window.innerWidth / window.innerHeight;
-                camera.updateProjectionMatrix();
-                renderer.setSize(window.innerWidth, window.innerHeight);
+            function updateAudioReactiveParticles() {
+                if (!audioMeter) return;
+                const level = audioMeter.getValue() + 80;
+                const scale = THREE.MathUtils.mapLinear(level, 0, 80, 0.1, 1.5);
+                particles.material.size = THREE.MathUtils.clamp(scale, 0.1, 1.5);
             }
 
-            function handleMouseDown(event) {
-                isGrabbing = true;
-                container.classList.add('grabbing');
-                previousMousePosition.x = event.clientX;
-                previousMousePosition.y = event.clientY;
-            }
-
-            function handleMouseMove(event) {
-                if (!isGrabbing) return;
-                const clientX = event.clientX;
-                const clientY = event.clientY;
-                const deltaX = clientX - previousMousePosition.x;
-                const deltaY = clientY - previousMousePosition.y;
-
-                cubesGroup.rotation.y += deltaX * 0.005;
-                cubesGroup.rotation.x += deltaY * 0.005;
-
-                previousMousePosition.x = clientX;
-                previousMousePosition.y = clientY;
-            }
-
-            function handleMouseUp() {
-                isGrabbing = false;
-                container.classList.remove('grabbing');
-            }
-            
-            // --- LÓGICA DE INTERACCIÓN TÁCTIL (ROTACIÓN Y ZOOM) ---
-            let initialPinchDistance = 0;
-
-            function handleTouchStart(event) {
-                if (event.touches.length > 1) {
-                    event.preventDefault();
-                }
-
-                if (event.touches.length === 1) {
-                    handleMouseDown(event.touches[0]);
-                } else if (event.touches.length === 2) {
-                    isGrabbing = false;
-                    container.classList.remove('grabbing');
-                    const dx = event.touches[0].clientX - event.touches[1].clientX;
-                    const dy = event.touches[0].clientY - event.touches[1].clientY;
-                    initialPinchDistance = Math.sqrt(dx * dx + dy * dy);
-                }
-            }
-
-            function handleTouchMove(event) {
-                 if (event.touches.length > 1) {
-                    event.preventDefault();
-                }
-
-                if (event.touches.length === 1) {
-                    handleMouseMove(event.touches[0]);
-                } else if (event.touches.length === 2 && initialPinchDistance > 0) {
-                    const dx = event.touches[0].clientX - event.touches[1].clientX;
-                    const dy = event.touches[0].clientY - event.touches[1].clientY;
-                    const currentDistance = Math.sqrt(dx * dx + dy * dy);
-                    
-                    const zoomFactor = currentDistance / initialPinchDistance;
-                    camera.position.z /= zoomFactor;
-                    
-                    camera.position.z = Math.max(5, Math.min(camera.position.z, 50));
-                    
-                    initialPinchDistance = currentDistance;
-                }
-            }
-
-            function handleTouchEnd(event) {
-                initialPinchDistance = 0;
-                if (event.touches.length < 2) {
-                    handleMouseUp();
-                }
-            }
-
-            // --- LÓGICA DE PANELES ARRASTRABLES ---
-            function onDragStart(event) {
-                const target = event.target.closest('.draggable');
-                if (!target || event.target.closest('button') || event.target.closest('input') || event.target.closest('select')) {
-                    return;
-                }
-
-                if (target.id === 'controls-panel' && !event.target.closest('.cursor-grab')) {
-                    return;
-                }
-
-                event.preventDefault();
-                dragState.isDragging = true;
-                dragState.target = target;
-                target.classList.add('dragging');
-                
-                const touch = event.touches ? event.touches[0] : event;
-                dragState.startX = touch.clientX;
-                dragState.startY = touch.clientY;
-                
-                const style = window.getComputedStyle(target);
-                const matrix = new DOMMatrix(style.transform);
-                dragState.initialLeft = matrix.m41;
-                dragState.initialTop = matrix.m42;
-            }
-
-            function onDragMove(event) {
-                if (!dragState.isDragging) return;
-                
-                const touch = event.touches ? event.touches[0] : event;
-                const deltaX = touch.clientX - dragState.startX;
-                const deltaY = touch.clientY - dragState.startY;
-                
-                dragState.currentX = dragState.initialLeft + deltaX;
-                dragState.currentY = dragState.initialTop + deltaY;
-                
-                dragState.target.style.transform = `translate(${dragState.currentX}px, ${dragState.currentY}px)`;
-            }
-
-            function onDragEnd() {
-                if (!dragState.isDragging) return;
-                dragState.isDragging = false;
-                dragState.target.classList.remove('dragging');
-                dragState.target = null;
-            }
-            
-            // --- EVENT LISTENERS ---
+            // --- MANEJADORES DE EVENTOS UI ---
             continueButton.addEventListener('click', () => {
                 welcomeScreen.style.opacity = '0';
                 setTimeout(() => {
@@ -957,62 +761,207 @@
                     setTimeout(() => startScreen.style.opacity = '1', 50);
                 }, 500);
             });
-            startButton.addEventListener('click', startExperience);
-            stopBtn.addEventListener('click', stopExperience);
-            window.addEventListener('resize', onWindowResize);
-            
-            // Listeners para Ratón
-            container.addEventListener('mousedown', handleMouseDown);
-            window.addEventListener('mousemove', handleMouseMove);
-            window.addEventListener('mouseup', handleMouseUp);
-            
-            // Listeners para Táctil
-            container.addEventListener('touchstart', handleTouchStart, { passive: false });
-            window.addEventListener('touchmove', handleTouchMove, { passive: false });
-            window.addEventListener('touchend', handleTouchEnd);
-            
-            document.addEventListener('mousedown', onDragStart);
-            document.addEventListener('mousemove', onDragMove);
-            document.addEventListener('mouseup', onDragEnd);
-            document.addEventListener('touchstart', onDragStart, { passive: false });
-            document.addEventListener('touchmove', onDragMove, { passive: false });
-            document.addEventListener('touchend', onDragEnd);
 
-            modeSelect.addEventListener('change', (e) => {
-                if(isAudioInitialized) setupAudio(e.target.value);
+            startButton.addEventListener('click', async () => {
+                if (startButton.disabled) return;
+                
+                await initTone();
+                setupAudio(modeSelect.value);
+
+                try {
+                    videoStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+                    videoElement.srcObject = videoStream;
+                    videoElement.addEventListener("loadeddata", () => {
+                        canvasElement.width = videoElement.videoWidth;
+                        canvasElement.height = videoElement.videoHeight;
+                        videoElement.play();
+                        
+                        overlay.style.opacity = '0';
+                        overlay.style.pointerEvents = 'none';
+                        cameraContainer.style.display = 'block';
+                        controlsPanel.style.display = 'block';
+                        
+                        predictWebcam();
+                        animate();
+                    });
+                } catch (err) {
+                    console.error("Error al acceder a la cámara:", err);
+                    alert("Error al acceder a la cámara. Por favor, verifica los permisos.");
+                }
             });
+
+            stopBtn.addEventListener('click', () => {
+                if (videoStream) {
+                    videoStream.getTracks().forEach(track => track.stop());
+                }
+                if (animationFrameId) {
+                    cancelAnimationFrame(animationFrameId);
+                }
+                if (animateFrameId) {
+                    cancelAnimationFrame(animateFrameId);
+                }
+                overlay.style.opacity = '1';
+                overlay.style.pointerEvents = 'auto';
+                cameraContainer.style.display = 'none';
+                controlsPanel.style.display = 'none';
+                startScreen.style.opacity = '0';
+                startScreen.style.display = 'none';
+                welcomeScreen.style.display = 'block';
+                setTimeout(() => welcomeScreen.style.opacity = '1', 50);
+            });
+            
+            resetBtn.addEventListener('click', () => {
+                cubesGroup.rotation.set(0, 0, 0);
+                camera.position.z = initialCameraPos;
+            });
+            
+            modeSelect.addEventListener('change', (e) => {
+                setupAudio(e.target.value);
+            });
+            
             volumeSlider.addEventListener('input', (e) => {
-                const volume = parseFloat(e.target.value);
-                const db = Tone.gainToDb(volume / 100);
-                Tone.Destination.volume.value = db;
+                const volume = e.target.value;
+                Tone.Destination.volume.value = Tone.dbToGain(volume / 100 * 20 - 20);
                 volumeValueSpan.textContent = `${volume}%`;
             });
+            
             reverbSlider.addEventListener('input', (e) => {
-                if (reverb) reverb.wet.value = parseFloat(e.target.value) / 100;
+                const wet = e.target.value / 100;
+                reverb.wet.value = wet;
                 reverbValueSpan.textContent = `${e.target.value}%`;
             });
-            resetBtn.addEventListener('click', () => {
-                camera.position.z = initialCameraPos;
-                camera.position.x = 0;
-                camera.position.y = 0;
-                camera.lookAt(scene.position);
-                cubesGroup.rotation.set(0, 0, 0);
-            });
+
+            // Lógica para minimizar/maximizar el panel
             minimizeBtn.addEventListener('click', () => {
-                controlsPanel.style.display = 'none';
-                menuButton.style.display = 'flex';
-            });
-            menuButton.addEventListener('click', () => {
-                controlsPanel.style.display = 'block';
-                menuButton.style.display = 'none';
+                controlsPanel.style.opacity = '0';
+                controlsPanel.style.pointerEvents = 'none';
+                setTimeout(() => {
+                    controlsPanel.style.display = 'none';
+                    menuButton.style.display = 'flex';
+                }, 300);
             });
 
-            // --- INICIO ---
+            menuButton.addEventListener('click', () => {
+                menuButton.style.display = 'none';
+                controlsPanel.style.display = 'block';
+                setTimeout(() => {
+                    controlsPanel.style.opacity = '1';
+                    controlsPanel.style.pointerEvents = 'auto';
+                }, 50);
+            });
+
+            // Lógica de arrastre de paneles
+            const startDrag = (e) => {
+                if (!e.target.closest('.draggable')) return;
+                e.preventDefault();
+                dragState.isDragging = true;
+                dragState.target = e.target.closest('.draggable');
+                dragState.target.classList.add('dragging');
+                dragState.startX = e.clientX || e.touches[0].clientX;
+                dragState.startY = e.clientY || e.touches[0].clientY;
+                dragState.initialLeft = dragState.target.offsetLeft;
+                dragState.initialTop = dragState.target.offsetTop;
+            };
+
+            const drag = (e) => {
+                if (!dragState.isDragging) return;
+                e.preventDefault();
+                dragState.currentX = e.clientX || e.touches[0].clientX;
+                dragState.currentY = e.clientY || e.touches[0].clientY;
+                const deltaX = dragState.currentX - dragState.startX;
+                const deltaY = dragState.currentY - dragState.startY;
+                const newLeft = dragState.initialLeft + deltaX;
+                const newTop = dragState.initialTop + deltaY;
+                dragState.target.style.left = `${newLeft}px`;
+                dragState.target.style.top = `${newTop}px`;
+                dragState.target.style.transform = '';
+            };
+
+            const endDrag = () => {
+                if (dragState.isDragging && dragState.target) {
+                    dragState.isDragging = false;
+                    dragState.target.classList.remove('dragging');
+                    dragState.target = null;
+                }
+            };
+            
+            // Eventos para arrastrar los paneles
+            controlsPanel.addEventListener('mousedown', startDrag);
+            cameraContainer.addEventListener('mousedown', startDrag);
+            window.addEventListener('mousemove', drag);
+            window.addEventListener('mouseup', endDrag);
+
+            // Eventos táctiles para arrastrar los paneles
+            controlsPanel.addEventListener('touchstart', startDrag, { passive: false });
+            cameraContainer.addEventListener('touchstart', startDrag, { passive: false });
+            window.addEventListener('touchmove', drag, { passive: false });
+            window.addEventListener('touchend', endDrag);
+
+            // --- MANEJADORES DE EVENTOS DE INTERACCIÓN DE LA CÁMARA ---
+            container.addEventListener('mousedown', (e) => {
+                isGrabbing = true;
+                container.classList.add('grabbing');
+                previousMousePosition.x = e.clientX;
+                previousMousePosition.y = e.clientY;
+            });
+            container.addEventListener('mousemove', (e) => {
+                if (!isGrabbing) return;
+                const deltaX = e.clientX - previousMousePosition.x;
+                const deltaY = e.clientY - previousMousePosition.y;
+                cubesGroup.rotation.y += deltaX * 0.005;
+                cubesGroup.rotation.x += deltaY * 0.005;
+                previousMousePosition.x = e.clientX;
+                previousMousePosition.y = e.clientY;
+            });
+            container.addEventListener('mouseup', () => {
+                isGrabbing = false;
+                container.classList.remove('grabbing');
+            });
+            
+            // Eventos táctiles para la rotación
+            let touchStartTime = 0;
+            let lastTouch = { x: 0, y: 0 };
+
+            container.addEventListener('touchstart', (e) => {
+                if (e.touches.length === 1) {
+                    isGrabbing = true;
+                    touchStartTime = performance.now();
+                    lastTouch.x = e.touches[0].clientX;
+                    lastTouch.y = e.touches[0].clientY;
+                }
+            }, { passive: false });
+            
+            container.addEventListener('touchmove', (e) => {
+                if (e.touches.length === 1 && isGrabbing) {
+                    e.preventDefault();
+                    const touch = e.touches[0];
+                    const deltaX = touch.clientX - lastTouch.x;
+                    const deltaY = touch.clientY - lastTouch.y;
+                    cubesGroup.rotation.y += deltaX * 0.005;
+                    cubesGroup.rotation.x += deltaY * 0.005;
+                    lastTouch.x = touch.clientX;
+                    lastTouch.y = touch.clientY;
+                }
+            }, { passive: false });
+            
+            container.addEventListener('touchend', () => {
+                isGrabbing = false;
+            });
+
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+                if (videoStream) {
+                    canvasElement.width = videoElement.videoWidth;
+                    canvasElement.height = videoElement.videoHeight;
+                }
+            });
+
+            // Inicio de la aplicación
             initThree();
             createHandLandmarker();
         });
     </script>
 </body>
 </html>
-
-
