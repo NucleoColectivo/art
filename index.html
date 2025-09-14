@@ -59,8 +59,15 @@
         }
         .overlay-screen {
             transition: opacity 0.5s ease-in-out;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100%;
+            width: 100%;
+            padding: 1rem;
         }
-
+        
         /* --- Botón de Inicio --- */
         #startButton, #continueButton {
             padding: 0.75rem 2rem;
@@ -183,10 +190,8 @@
 
         /* Estilos para Móviles */
         @media (max-width: 768px) {
-            #overlay {
+            .overlay-screen {
                 padding: 1rem;
-                justify-content: start; /* Alinear contenido arriba */
-                padding-top: 5vh; /* Espacio desde arriba */
             }
             .feature-card-container { flex-direction: column; gap: 1rem; }
             .feature-card { width: 100%; max-width: 320px; padding: 1rem; }
@@ -366,7 +371,7 @@
     <!-- Superposición de Bienvenida -->
     <div id="overlay">
         <!-- Pantalla 1: Bienvenida -->
-        <div id="welcome-screen" class="overlay-screen text-center p-4 max-w-4xl mx-auto">
+        <div id="welcome-screen" class="overlay-screen max-w-4xl mx-auto">
             <h1 class="glitch-text" data-text="Arte Interactivo">Arte Interactivo</h1>
             <h2 class="glitch-text" data-text="y Sonido Reactivo">y Sonido Reactivo</h2>
             <p class="description text-base text-gray-300 max-w-2xl mx-auto mt-8 mb-10">Transforma tu mano en un instrumento. Toca los cubos para producir sonidos y efectos visuales en una experiencia inmersiva que fusiona arte, música y visión por computadora.</p>
@@ -374,7 +379,7 @@
         </div>
 
         <!-- Pantalla 2: Iniciar -->
-        <div id="start-screen" class="overlay-screen text-center p-4 max-w-4xl mx-auto" style="display: none; opacity: 0;">
+        <div id="start-screen" class="overlay-screen max-w-4xl mx-auto" style="display: none; opacity: 0;">
              <p class="description text-base text-gray-300 max-w-2xl mx-auto mb-10">
                 A continuación, se activará tu cámara para detectar los gestos de tu mano. Asegúrate de estar en un lugar bien iluminado y permite el acceso cuando el navegador lo solicite. ¡Prepárate para crear música con tus movimientos!
             </p>
@@ -757,7 +762,7 @@
                 welcomeScreen.style.opacity = '0';
                 setTimeout(() => {
                     welcomeScreen.style.display = 'none';
-                    startScreen.style.display = 'block';
+                    startScreen.style.display = 'flex';
                     setTimeout(() => startScreen.style.opacity = '1', 50);
                 }, 500);
             });
@@ -806,7 +811,7 @@
                 controlsPanel.style.display = 'none';
                 startScreen.style.opacity = '0';
                 startScreen.style.display = 'none';
-                welcomeScreen.style.display = 'block';
+                welcomeScreen.style.display = 'flex';
                 setTimeout(() => welcomeScreen.style.opacity = '1', 50);
             });
             
@@ -843,7 +848,7 @@
 
             menuButton.addEventListener('click', () => {
                 menuButton.style.display = 'none';
-                controlsPanel.style.display = 'block';
+                controlsPanel.style.display = 'flex';
                 setTimeout(() => {
                     controlsPanel.style.opacity = '1';
                     controlsPanel.style.pointerEvents = 'auto';
