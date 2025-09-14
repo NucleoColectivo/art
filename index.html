@@ -24,6 +24,7 @@
             display: flex;
             justify-content: center;
             align-items: center;
+            min-height: 100vh; /* Asegura que el body tenga al menos la altura de la ventana */
         }
 
         /* --- Contenedor Principal de la Escena 3D --- */
@@ -39,7 +40,7 @@
 
         /* --- Superposición de Bienvenida --- */
         #overlay {
-            position: absolute;
+            position: fixed; /* Usar 'fixed' para cubrir toda la ventana */
             top: 0;
             left: 0;
             width: 100%;
